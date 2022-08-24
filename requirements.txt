@@ -12,3 +12,4 @@ requests==2.28.1
 requests-toolbelt==0.9.1
 six==1.16.0
 urllib3==1.26.11
+missingno==0.5.1
