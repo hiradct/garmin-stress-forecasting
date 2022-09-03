@@ -3,7 +3,12 @@ library(shiny)
 # Define UI for the app
 ui <- fluidPage(
   # App title
-  titlePanel("Team Chernoff")
+  navbarPage("Team Chernoff",
+             tabPanel("Charts"),
+             tabPanel("Model"),
+             tabPanel("Summary"),
+             tabPanel("Other")
+  )
 )
 
 # Define server logic for the app
