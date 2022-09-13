@@ -18,7 +18,6 @@ model <- arima(stressLevel.train,
   )
 )
 
-# Define UI for the app
 ui <- fluidPage(
   # App title
   titlePanel("Forecasting stress by Team Chernoff 😎"),
@@ -52,9 +51,7 @@ ui <- fluidPage(
   )
 )
 
-# Define server logic for the app
 server <- function(input, output) {
-  
   activeDataset <- reactive({
     return(switch(input$metric,
       "heart rate" = {
@@ -71,10 +68,12 @@ server <- function(input, output) {
 
   TestDataset <- reactive({
     stressLevel.test <- ts(df %>%
-                             filter(X >= "2022-09-09",
-                                    X <= ymd("2022-09-09") + hours(input$ahead+4)) %>%
-                             select(Historical.Stress),
-                           start = 192
+      filter(
+        X >= "2022-09-09",
+        X <= ymd("2022-09-09") + hours(input$ahead + 4)
+      ) %>%
+      select(Historical.Stress),
+    start = 192
     )
     return(stressLevel.test)
   })
@@ -84,13 +83,32 @@ server <- function(input, output) {
   })
 
   output$actualPlot <- renderPlot({
-    plot.ts(activeDataset())
+    autoplot(activeDataset()) +
+      labs(
+        title = "9-days stress trend",
+        x = "Hours",
+        y = "Stress Level"
+      ) +
+      theme(
+        plot.title = element_text(size = 22, face = "bold"),
+        axis.title = element_text(size = 16),
+        axis.text = element_text(size = 12)
+      )
   })
 
   output$forecastPlot <- renderPlot({
     autoplot(forecast(model, h = input$ahead)) +
-      labs(x = NULL, y = input$metric, title = "ARIMA Model Forecast") +
-      theme_light()
+      labs(
+        x = NULL,
+        y = "Stress Level",
+        title = paste0(input$ahead, " hours stress forecast with ARIMA model")
+      ) +
+      theme_light() +
+      theme(
+        plot.title = element_text(size = 22, face = "bold"),
+        axis.title = element_text(size = 16),
+        axis.text = element_text(size = 12)
+      )
   })
 
   ranges <- reactiveValues(x = NULL, y = NULL)
@@ -100,17 +118,26 @@ server <- function(input, output) {
       coord_cartesian(xlim = ranges$x, ylim = ranges$y) +
       autolayer(TestDataset(), series = input$metric) +
       guides(
-        colour = guide_legend(title = "Actual values"),
-        fill = guide_legend(title = "Prediction interval")
+        colour = guide_legend(title = "Actual values")
       ) +
-      labs(x = NULL, y = input$metric, title = "ARIMA Model Forecast + Actual") +
-      theme_light()
+      labs(
+        x = NULL,
+        y = "Stress Level",
+        title = "Actual values overlaid with forecasted"
+      ) +
+      theme_light() +
+      theme(
+        plot.title = element_text(size = 22, face = "bold"),
+        axis.title = element_text(size = 16),
+        axis.text = element_text(size = 12),
+        legend.position = "top"
+      )
   })
 
   output$summary <- renderDataTable({
     cbind(
-      Metric = rownames(t(accuracy(model))),
-      t(accuracy(model))
+      Metric = rownames(t(accuracy(forecast(model, h = input$ahead), TestDataset()))),
+      t(accuracy(forecast(model, h = input$ahead), TestDataset()))
     )
   })
 
@@ -125,6 +152,7 @@ server <- function(input, output) {
     }
   })
 }
+
 
 # Create Shiny app
 shinyApp(ui = ui, server = server)
