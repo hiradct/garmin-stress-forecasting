@@ -20,6 +20,7 @@ library(Hmisc)
 #install.packages('forecast')
 library(forecast)
 library(naniar)
+library(Metrics)
 
 
 #### STEP_2 - Read the data ####
@@ -31,16 +32,15 @@ garmin_raw_df <- subset(garmin_raw_data, select = c(1,5,15))
 #### STEP 3 - Initial Data Clean-up and Transformations#####
 
 #split timestamp into more fields
-garmin_raw_df$timestamp <- as.POSIXct( garmin_raw_df$timestamp, tz = "UTC" )
+garmin_raw_df$timestamp <- as.POSIXct(garmin_raw_df$timestamp, tz = "UTC" )
 garmin_raw_df$date <- as.Date(garmin_raw_df$timestamp)
 ### Add Month, Week and Day numbers
 garmin_raw_df$week <- as.integer(strftime(garmin_raw_df$date, format = "%V"))
 garmin_raw_df$month <- as.integer(strftime(garmin_raw_df$date, format = "%m"))
 #Find Numeric Day of Week (Assuming Week Starts on Monday)
-garmin_raw_df$day <- as.integer(wday(garmin_raw_df$date, week_start=1))
+#garmin_raw_df$day <- wday(garmin_raw_df$date, week_start=1)
 garmin_raw_df$hour <- as.integer(format(as.POSIXct(garmin_raw_df$timestamp),"%H"))
 garmin_raw_df$min <- as.integer(format(as.POSIXct(garmin_raw_df$timestamp),"%M"))
-
 #reorder columns
 garmin_series <- select(garmin_raw_df,1,4,6,5,7:8,2,3)
 
@@ -59,7 +59,9 @@ library("imputeTS")
 # ggplot_na_distribution(garmin_series$stressLevel, x_axis_labels = garmin_series$date)
 # ggplot_na_intervals(garmin_series$stressLevel, interval_size = 720,color_missing = "gold3")
 
-garmin_df <-garmin_series[!(garmin_series$week %in% c('22')),]
+garmin_df <-garmin_series[!(garmin_series$week %in% c(19,20,21,22)),]
+
+
 #REMOVED 5,000 datapoints, from 13 to 10 weeks
 
 describe(garmin_df)
@@ -167,15 +169,35 @@ plot.ts(stress.ts)
 plot.ts(heart.rate.ts)
 
 
-#### STEP_6 - Split data into train & Test set####
+#### STEP_6 - SPLIT into HIST, SHORT-HIST & DEMO 2-day TEST####
 
 # Datasets --> garmin_df_stress.hourly & garmin_df_hr.hourly
 
-train.xts = stress.xts["2022-06-06/2022-08-10"] #1580
-test.xts = stress.xts["2022-08-11/"] #385
+first(stress.xts) # 2022-06-06
+last(stress.xts) # 2022-09-11
+#remove the last 2 days
+stress.xts <- stress.xts["/2022-09-10"]
+last(stress.xts) # 2022-09-10
+
+
+#train.xts = stress.xts["2022-06-08/2022-09-08"] #train set of 3 months
+#train.xts = stress.xts["2022-07-08/2022-09-08"] #train set of 2 months
+train.xts = stress.xts["2022-08-08/2022-09-08"] #train set of 1 months
+
+last(train.xts)
+
+demo.test.xts = stress.xts["2022-09-09/"] # test set of 2 days
+first(demo.test.xts)
+
+demo.hist.xts = stress.xts["2022-09-01/2022-09-08"]
+first(demo.hist.xts)
+last(demo.hist.xts)
+
 
 train.ts <-ts_ts(train.xts)
-test.xts <-ts_ts(test.xts)
+demo.test.ts <-ts_ts(demo.test.xts)
+demo.hist.ts <-ts_ts(demo.hist.xts)
+
 
 
 #### STEP_7 - Identify Time-Series Components####
@@ -270,85 +292,183 @@ checkresiduals(model.auto)  # Check the quality of fit. Residuals should:
 #....indicating there is some pattern in the residuals. There is still information to be extracted from the data.
 # so this means that the daily cyclical pattern requires us to use SARIMA instead of ARIMA
 
-fit_season <- Arima(train.xts, order=c(5,0,0), seasonal=list(order=c(0,1,1),period=24))
+fit_season <- Arima(train.xts, order=c(4,0,1), seasonal=list(order=c(0,1,1),period=24))
 fit_season
 # Plot the forecasting in the original scale
-fc1<-forecast(fit_season,96)
+fc1<-forecast(fit_season,48)
 autoplot(fc1)
 
 summary(fit_season)
 
-
 ##TRY the same model using SARIMA function
+#fit_model = sarima(train.xts,4,0,1,0,1,1,24)
 
-fit_model = sarima(train.xts,5,0,0,0,1,1,24)
+##-----------FINAL MODEL PARAMETERS-------##
+p <- 4
+d <- 0
+q <- 1
 
-forecasted = sarima.for(train.xts,48,5,0,0,0,1,1,24)
+P <- 0
+D <- 1
+Q <- 1
 
-?sarima.for
-#------------- DO NOT USE - Automatic ARIMA Modeling - Use DE-seasoned ts -------------------
+interval <- 24
+prediction_window = 48 #NEXT 48 HOURS
 
-model.auto_2 <- auto.arima(train.ts_deSeason,trace=TRUE, max.p = 10, max.q = 10, stepwise = TRUE) #Fit using the Hyndman-Khandakar algorithm (Hyndman & Khandakar, 2008)
-model.auto_2
+#PREDICTION OF September 9-10
 
-# It suggests a seasonal ARIMA(1,0,2)(0,0,1) with  model with non-zero mean, AIC=12183.39   AICc=12183.44   BIC=12215.6
-checkresiduals(model.auto_2)  # Check the quality of fit. Residuals should: 
-#The p-value in the Ljung–Box test is large, 
-#....indicating that the residuals are patternless—meaning all the information 
-#......has been extracted by the model and only noise is left behind.
+fit_model = sarima(demo.hist.xts,p,d,q,P,D,Q,interval)
+summary(fit_model)
 
-fit_season2 <- Arima(train.ts, order=c(1,0,2), seasonal=list(order=c(0,0,1),period=24))
-fit_season2
-# Plot the forecasting in the original scale
-fc2<-forecast(fit_season2,96)
-autoplot(fc2)
-
-#-------------DO NOT USE - Automatic ARIMA Modeling - Use DE-seasoned + DIFF ts -------------------
-model.auto_3 <- auto.arima(train.ts_deSeason_diff,trace=TRUE, max.p = 10, max.q = 10, stepwise = TRUE) #Fit using the Hyndman-Khandakar algorithm (Hyndman & Khandakar, 2008)
-model.auto_3
-
-# It suggests a Best model: ARIMA(4,0,0)(0,0,1)[24] with zero mean   with  model with non-zero mean, AIC=12282.86   AICc=12282.91   BIC=12315.06
-# NOTE - the AIC/AICs/BIC of this model is slighlty worse than than the prev de-seasoned-only model, should we not diff by 1?
-
-checkresiduals(model.auto_3)  # Check the quality of fit. Residuals should: 
-# The p-values for the Ljung–Box statistics are small, 
-#....indicating there is some pattern in the residuals. There is still information to be extracted from the data.
+forecasted = sarima.for(demo.hist.xts,prediction_window,p,d,q,P,D,Q,interval)
 
 
-fit_season3 <- Arima(train.ts_deSeason_diff, order=c(1,0,2), seasonal=c(0,0,1))
-fit_season3
-# Plot the forecasting in the original scale
-fc<-forecast(fit_season3,96)
+
+predicted_demo_48hrs <- as.data.frame(forecasted) #pred is forcast and se is pred standard errors
+names(predicted_demo_48hrs)[1] <- 'Predict_Stress'
+names(predicted_demo_48hrs)[2] <- 'Predict_Stress_SE'
+
+demo_actual_48hrs <- as.data.frame(demo.test.xts)
+names(demo_actual_48hrs)[1] <- 'Actual_Stress'
+
+demo_ouput_df <- cbind(demo_actual_48hrs,predicted_demo_48hrs)
+
+demo_hist_df <-  as.data.frame(demo.hist.xts)
+names(demo_hist_df)[1] <- 'Historical_Stress'
+
+
+####----------->>>>>>THERE YOU HAVE IT LADIES AND GENTLEMEN<<<<<------------####
+demo_hist_df
+demo_ouput_df
+
+
+write.csv(demo_hist_df,'F:\\Smith MMA\\MMA867 Predictive Modelling\\Term Project\\Final Code\\demo_hist_df.csv', row.names = TRUE)
+write.csv(demo_ouput_df,'F:\\Smith MMA\\MMA867 Predictive Modelling\\Term Project\\Final Code\\demo_ouput_df.csv',row.names = TRUE)
+
+
+####----------->>>>>>Validate actual and forecast<<<<<------------####
+
+
+demo_ouput_df.xts <- as.xts(demo_ouput_df)
+
+myplot <- plot.xts(demo_ouput_df.xts$Actual_Stress, main = "Actual vs Forecasted Stress", lwd = 3,, grid.col = NA, col = "Blue")
+lines(demo_ouput_df.xts$Predict_Stress, col = "Green", lwd = 3)
+
+fc_MSE <- mean((demo_ouput_df$Predict_Stress-demo_ouput_df$Actual_Stress)^2) #calculate and display MSE in the testing set
+fc_RMSE <- rmse(demo_ouput_df$Actual_Stress, demo_ouput_df$Predict_Stress) #calculate and display RMSE 
+fc_MAPE <-mean(abs(demo_ouput_df$Predict_Stress-demo_ouput_df$Actual_Stress)/demo_ouput_df$Actual_Stress*100)
+
+
+
+
+
+
+####----------->>>>>>Heart Rate Prediction<<<<<------------####
+
+
+#### We pick up from STEP_6 - SPLIT into HIST, SHORT-HIST & DEMO 2-day TEST####
+
+# Datasets --> garmin_df_stress.hourly & garmin_df_hr.hourly
+
+first(heart.rate.xts) # 2022-06-06
+last(heart.rate.xts) # 2022-09-11
+#remove the last 2 days
+heart.rate.xts <- heart.rate.xts["/2022-09-10"]
+last(heart.rate.xts) # 2022-09-10
+
+
+trainhr.xts = heart.rate.xts["2022-08-08/2022-09-08"]
+last(trainhr.xts)
+
+demo.testhr.xts = heart.rate.xts["2022-09-09/"] 
+first(demo.testhr.xts)
+
+demo.histhr.xts = heart.rate.xts["2022-09-01/2022-09-08"]
+first(demo.histhr.xts)
+last(demo.histhr.xts)
+
+
+trainhr.ts <-ts_ts(trainhr.xts)
+demo.testhr.ts <-ts_ts(demo.testhr.xts)
+demo.histhr.ts <-ts_ts(demo.histhr.xts)
+
+#### STEP_7 - Identify Time-Series Components####
+
+#------------Visualize Decomposition---------#
+library(forecast)
+library(fpp)
+
+#-------------Modelling via Automatic ARIMA --------------------
+
+model.autohr <- auto.arima(trainhr.xts, seasonal= TRUE,approximation = FALSE,trace=TRUE, stepwise = FALSE, max.p = 10, max.q = 10) #Fit using the Hyndman-Khandakar algorithm (Hyndman & Khandakar, 2008)
+
+fit.alternative1 <- Arima(demo.histhr.xts, order=c(2,0,3), seasonal=list(order=c(0,1,1),period=24)) 
+fc<-forecast(fit.alternative1,48)
 autoplot(fc)
 
 
+#---auto AIMA IS STUPID
+
+# It suggests a ARIMA(2,0, 3) model with non-zero mean, 
+#checkresiduals(model.auto)  # Check the quality of fit. Residuals should: 
+
+
+##TRY the same model using SARIMA function
+#fit_model = sarima(train.xts,2,0,3,0,1,1,24)
+
+##-----------FINAL MODEL PARAMETERS-------##
+p <- 2
+d <- 0
+q <- 3
+
+P <- 0
+D <- 1
+Q <- 1
+
+interval <- 24
+prediction_window = 48 #NEXT 48 HOURS
+
+#PREDICTION OF September 9-10
+
+fit_modelhr = sarima(demo.histhr.xts,p,d,q,P,D,Q,interval)
+summary(fit_modelhr)
+
+forecastedhr = sarima.for(demo.histhr.xts,prediction_window,p,d,q,P,D,Q,interval)
 
 
 
+predicted_demohr_48hrs <- as.data.frame(forecastedhr) #pred is forecast and se is pred standard errors
+names(predicted_demohr_48hrs)[1] <- 'Predict_HR'
+names(predicted_demohr_48hrs)[2] <- 'Predict_HR_SE'
+
+demo_actualhr_48hrs <- as.data.frame(demo.testhr.xts)
+names(demo_actualhr_48hrs)[1] <- 'Actual_HR'
+
+demo_ouputhr_df <- cbind(demo_actualhr_48hrs,predicted_demohr_48hrs)
+
+demo_histhr_df <-  as.data.frame(demo.histhr.xts)
+names(demo_histhr_df)[1] <- 'Historical_HR'
 
 
+####----------->>>>>>THERE YOU HAVE IT LADIES AND GENTLEMEN<<<<<------------####
+demo_histhr_df
+demo_ouputhr_df
 
 
-#Create a Box Plot by Day
-
-#Create a Box Plot by Week
-
+write.csv(demo_histhr_df,'F:\\Smith MMA\\MMA867 Predictive Modelling\\Term Project\\Final Code\\demo_histhr_df.csv', row.names = TRUE)
+write.csv(demo_ouputhr_df,'F:\\Smith MMA\\MMA867 Predictive Modelling\\Term Project\\Final Code\\demo_ouputhr_df.csv',row.names = TRUE)
 
 
- 
-#-------------Make Predictions on test set with trained SARIMA model --------------------
+####----------->>>>>>Validate actual and forecast<<<<<------------####
 
 
-# specify the xts test and train series 
+demo_ouputhr_df.xts <- as.xts(demo_ouputhr_df)
+
+myplot <- plot.xts(demo_ouputhr_df.xts$Actual_HR, main = "Actual vs Forecasted HR", lwd = 3, grid.col = NA, col = "Blue")
+lines(demo_ouputhr_df.xts$Predict_HR, col = "Red", lwd = 3)
 
 
-# fit the selected sarima model on train set
-
-
-## produce forecasts for next
-myforecasts <- forecast::forecast(elecequip_sarima2, 385) 
-
-## plot the forecasts
-autoplot(myforecasts) + autolayer(elecequip_ts) + xlim(2005,2013) 
-
+fcHR_MSE <- mean((demo_ouputhr_df$Predict_HR-demo_ouputhr_df$Actual_HR)^2) #calculate and display MSE in the testing set
+fcHR_RMSE <- rmse(demo_ouputhr_df$Actual_HR, demo_ouputhr_df$Predict_HR) #calculate and display RMSE 
+fcHR_MAPE <-mean(abs(demo_ouputhr_df$Predict_HR-demo_ouputhr_df$Actual_HR)/demo_ouputhr_df$Actual_HR*100)
 
