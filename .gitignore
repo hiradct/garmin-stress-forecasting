@@ -177,3 +177,6 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# Ignore local Excel files
+*.xlsx
