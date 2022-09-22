@@ -163,7 +163,7 @@ garmin_df_hr.hourly$heartRate <- as.integer(round(garmin_df_hr.hourly$heartRate,
 
 
 
-#### STEP_6 - Split data into diff Hist Vectors + Predition period + DEMO 2-day forecast set####
+#### STEP_7 - Split data into diff training hist Vectors + one week prediction period ####
 
 
 # Datasets --> garmin_df_stress.hourly & garmin_df_hr.hourly
@@ -212,9 +212,7 @@ PAST_12.xts = stress.xts["2022-06-13/2022-09-08"]
 # plot.ts(stress.ts)
 
 
-
-
-#### STEP_7 - Identify Time-Series Components####
+#### STEP_8 - Identify Time-Series Components####
 
 #------------Visualize Decomposition---------#
 library(forecast)
@@ -237,7 +235,7 @@ fit_w <- stl(data_w,"periodic") # estimate the daily cyclical component
 autoplot(fit_w)
 
 
-## -----Check for hetero Does the variance increases with mean (heteroscedasticity)?-----
+#### STEP_9 - Check for hetero Does the variance increases with mean (heteroscedasticity)?-----
 #--> Statistical Testing -->  NO HETERO
 
 #The McLeod-Li test is a version of the Ljung-Box test for autocorrelation based on the squared data.
@@ -301,9 +299,9 @@ plot.ts(train.ts_deSeason_diff) #TAKE OUT TRENDING
 
 
 
-#-------------Model Build with varying training history period via Automatic ARIMA --------------------
+#### STEP_10 - Build Models with varying training history size --------------------
 
-### One Week Training Window, Trained Model --> (1,0,1)(0,1,1) ####
+## MODEL#1 DEV --> One Week Training Window, Trained Model --> (1,0,1)(0,1,1) ####
 
 #Obtain non-seasonal params from Auto ARIMA --> RESULT: (1,0,1)
 
@@ -322,7 +320,7 @@ checkresiduals(model_1_SARIMA)
 model_1
 model_1_SARIMA
 
-####Past 1 Test --> fcp1_RMSE = 18.43 #####
+## MODEL#1 EVAL --> Past 1 Test --> fcp1_RMSE = 18.43 #####
 
 forecasted_past1 = sarima.for(PAST_1.xts,96,1,0,1,0,1,1,24)
 
@@ -345,7 +343,7 @@ lines(TEST1_PAST_1_comb.xts$Predicted_Stress, col = "Red", lwd = 3)
 
 
 
-### Two Week Training Window, Trained Model --> (4,0,1)(0,1,1) ####
+## MODEL#2 DEV --> Two Week Training Window, Trained Model --> (4,0,1)(0,1,1) ####
 
 model_2 <- auto.arima(PAST_2.xts,seasonal= TRUE,approximation = FALSE,trace=TRUE, stepwise = FALSE, max.p = 10, max.q = 10) #Fit using the Hyndman-Khandakar algorithm (Hyndman & Khandakar, 2008)
 
@@ -361,7 +359,7 @@ checkresiduals(model_2_SARIMA)
 model_2
 model_3_SARIMA
 
-####Past 2 Test --> fcp2_RMSE = 15.80776 #####
+## MODEL#2 EVAL --> Past 2 Test --> fcp2_RMSE = 15.80776 #####
 
 forecasted_past2 = sarima.for(PAST_2.xts,96,4,0,1,0,1,1,24)
 
@@ -382,7 +380,7 @@ lines(TEST1_PAST_2_comb.xts$Predicted_Stress, col = "Red", lwd = 3)
 fcp2_RMSE
 
 
-### Four Week Training Window, Trained Model --> (4,0,1)(0,1,1) ####
+## MODEL#3 DEV --> **** FINAL MODEL **** Four Week Training Window, Trained Model --> (4,0,1)(0,1,1) ####
 
 model_3 <- auto.arima(PAST_4.xts, max.order = 20,seasonal= TRUE,approximation = FALSE,trace=TRUE, stepwise = FALSE) #Fit using the Hyndman-Khandakar algorithm (Hyndman & Khandakar, 2008)
 # model_3b <- auto.arima(PAST_4.xts,D=1,seasonal= TRUE,approximation = FALSE,trace=TRUE, stepwise = FALSE)
@@ -402,7 +400,7 @@ checkresiduals(model_3_SARIMA)
 model_3
 model_3_SARIMA
 
-####Past 4 Test --> fcp4_RMSE = 15.80907 #####
+## MODEL#3 EVAL --> Past 4 Test --> fcp4_RMSE = 15.80907 #####
 
 forecasted_past4 = sarima.for(PAST_4.xts,96,4,0,1,0,1,1,24)
 
@@ -427,7 +425,7 @@ fcp4_RMSE
 
 
 
-### Eight Week Training Window, Trained Model --> (0,1,3)(0,1,1)####
+## MODEL#4 DEV --> Eight Week Training Window, Trained Model --> (0,1,3)(0,1,1)####
 
 #Lambda <- BoxCox.lambda(PAST_8.xts)
 #D=1,lambda = Lambda
@@ -446,7 +444,7 @@ checkresiduals(model_4_SARIMA)
 model_4
 model_4_SARIMA
 
-####Past 8 Test --> fcp3_RMSE = 15.77468 #####
+## MODEL#4 EVAL --> Past 8 Test --> fcp8_RMSE = 15.77468 #####
 
 forecasted_past8 = sarima.for(PAST_8.xts,96,1,0,3,0,1,1,24)
 
@@ -467,7 +465,7 @@ lines(TEST1_PAST_8_comb.xts$Predicted_Stress, col = "Red", lwd = 3)
 fcp8_RMSE
 
 
-### Twelve  Week Training Window, Trained Model --> (2,0,4)(0,1,1) ####
+## MODEL#5 DEV --> Twelve  Week Training Window, Trained Model --> (2,0,4)(0,1,1) ####
 
 #Lambda <- BoxCox.lambda(PAST_8.xts)
 #D=1,lambda = Lambda
@@ -482,7 +480,7 @@ model_4_SARIMA <- Arima(PAST_8.xts, order=c(2,0,4), seasonal=list(order=c(0,1,1)
 summary(model_4_SARIMA)
 checkresiduals(model_4_SARIMA)
 
-####Past 12 Test --> fcp3_RMSE =  15.45822 #####
+## MODEL#5 EVAL --> Past 12 Test --> fcp12_RMSE =  15.45822 #####
 
 forecasted_past12 = sarima.for(PAST_12.xts,96,2,0,4,0,1,1,24)
 
@@ -511,182 +509,251 @@ fcp12_RMSE
 
 
 
-#### Line Prediction vs Actual Plots of all 5 models ####
 
 
+#### STEP_11 - NAIVE VS SARIMA Benchmarking & Performance ####
 
-
-##TRY the same model using SARIMA function
-#fit_model = sarima(train.xts,4,0,1,0,1,1,24)
-
-##-----------OLD FINAL MODEL PARAMETERS-------##
-p <- 4
-d <- 0
-q <- 1
-
-P <- 0
-D <- 1
-Q <- 1
-
-interval <- 24
-prediction_window = 48 #NEXT 48 HOURS
-
-#PREDICTION OF September 9-10
-
-fit_model = sarima(demo.hist.xts,p,d,q,P,D,Q,interval)
-summary(fit_model)
-
-forecasted = sarima.for(demo.hist.xts,prediction_window,p,d,q,P,D,Q,interval)
-
-
-
-predicted_demo_48hrs <- as.data.frame(forecasted) #pred is forcast and se is pred standard errors
-names(predicted_demo_48hrs)[1] <- 'Predict_Stress'
-names(predicted_demo_48hrs)[2] <- 'Predict_Stress_SE'
-
-demo_actual_48hrs <- as.data.frame(demo.test.xts)
-names(demo_actual_48hrs)[1] <- 'Actual_Stress'
-
-demo_ouput_df <- cbind(demo_actual_48hrs,predicted_demo_48hrs)
-
-demo_hist_df <-  as.data.frame(demo.hist.xts)
-names(demo_hist_df)[1] <- 'Historical_Stress'
-
-
-####----------->>>>>>THERE YOU HAVE IT LADIES AND GENTLEMEN<<<<<------------####
-demo_hist_df
-demo_ouput_df
-
-
-write.csv(demo_hist_df,'F:\\Smith MMA\\MMA867 Predictive Modelling\\Term Project\\Final Code\\demo_hist_df.csv', row.names = TRUE)
-write.csv(demo_ouput_df,'F:\\Smith MMA\\MMA867 Predictive Modelling\\Term Project\\Final Code\\demo_ouput_df.csv',row.names = TRUE)
-
-
-####----------->>>>>>Validate actual and forecast<<<<<------------####
-
-
-demo_ouput_df.xts <- as.xts(demo_ouput_df)
-
-myplot <- plot.xts(demo_ouput_df.xts$Actual_Stress, main = "Actual vs Forecasted Stress", lwd = 3, grid.col = NA, col = "Blue")
-lines(demo_ouput_df.xts$Predict_Stress, col = "Green", lwd = 3)
-
-fc_MSE <- mean((demo_ouput_df$Predict_Stress-demo_ouput_df$Actual_Stress)^2) #calculate and display MSE in the testing set
-fc_RMSE <- rmse(demo_ouput_df$Actual_Stress, demo_ouput_df$Predict_Stress) #calculate and display RMSE 
-fc_MAPE <-mean(abs(demo_ouput_df$Predict_Stress-demo_ouput_df$Actual_Stress)/demo_ouput_df$Actual_Stress*100)
-
-
-
-
-
-
-####----------->>>>>>Seasonal Naive Modeling - BENCHMARK<<<<<------------####
-
-
-sales.fc <- snaive(sales.ts, h=4)
-
-#### We pick up from STEP_6 - SPLIT into HIST, SHORT-HIST & DEMO 2-day TEST####
-
-# Datasets --> garmin_df_stress.hourly & garmin_df_hr.hourly
-
-first(heart.rate.xts) # 2022-06-06
-last(heart.rate.xts) # 2022-09-11
-#remove the last 2 days
-heart.rate.xts <- heart.rate.xts["/2022-09-10"]
-last(heart.rate.xts) # 2022-09-10
-
-
-trainhr.xts = heart.rate.xts["2022-08-08/2022-09-08"]
-last(trainhr.xts)
-
-demo.testhr.xts = heart.rate.xts["2022-09-09/"] 
-first(demo.testhr.xts)
-
-demo.histhr.xts = heart.rate.xts["2022-09-01/2022-09-08"]
-first(demo.histhr.xts)
-last(demo.histhr.xts)
-
-
-trainhr.ts <-ts_ts(trainhr.xts)
-demo.testhr.ts <-ts_ts(demo.testhr.xts)
-demo.histhr.ts <-ts_ts(demo.histhr.xts)
-
-#### STEP_7 - Identify Time-Series Components####
-
-#------------Visualize Decomposition---------#
+#Hist period --> first recorded 4 weeks --> ["2022-06-06/2022-07-03"]
 library(forecast)
-library(fpp)
+library(MLmetrics)
 
-#-------------Modelling via Automatic ARIMA --------------------
+hist_data <- stress.xts["2022-06-06/2022-07-03"]; hist_data.ts = ts_ts(hist_data); hist_data.ts = ts(hist_data.ts, frequency = 24)
 
-model.autohr <- auto.arima(trainhr.xts, seasonal= TRUE,approximation = FALSE,trace=TRUE, stepwise = FALSE, max.p = 10, max.q = 10) #Fit using the Hyndman-Khandakar algorithm (Hyndman & Khandakar, 2008)
-
-fit.alternative1 <- Arima(demo.histhr.xts, order=c(2,0,3), seasonal=list(order=c(0,1,1),period=24)) 
-fc<-forecast(fit.alternative1,48)
-autoplot(fc)
-
-
-#---auto AIMA IS STUPID
-
-# It suggests a ARIMA(2,0, 3) model with non-zero mean, 
-#checkresiduals(model.auto)  # Check the quality of fit. Residuals should: 
-
-
-##TRY the same model using SARIMA function
-#fit_model = sarima(train.xts,2,0,3,0,1,1,24)
-
-##-----------FINAL MODEL PARAMETERS-------##
-p <- 2
-d <- 0
-q <- 3
-
-P <- 0
-D <- 1
-Q <- 1
-
-interval <- 24
-prediction_window = 48 #NEXT 48 HOURS
-
-#PREDICTION OF September 9-10
-
-fit_modelhr = sarima(demo.histhr.xts,p,d,q,P,D,Q,interval)
-summary(fit_modelhr)
-
-forecastedhr = sarima.for(demo.histhr.xts,prediction_window,p,d,q,P,D,Q,interval)
+#1-6 DAYS PREDICTION WINDOWS
+actual_1_day <- stress.xts["2022-07-04"] ; names(actual_1_day)[1] <- 'Actual'; actual_1_day.df <- as.data.frame(actual_1_day);actual_1_day.ts = ts_ts(actual_1_day); actual_1_day.ts = ts(actual_1_day.ts, frequency = 24)
+actual_2_day <- stress.xts["2022-07-04/2022-07-05"] ; names(actual_2_day)[1] <- 'Actual'; actual_2_day.df <- as.data.frame(actual_2_day);actual_2_day.ts = ts_ts(actual_2_day); actual_2_day.ts = ts(actual_2_day.ts, frequency = 24)
+actual_3_day <- stress.xts["2022-07-04/2022-07-06"] ; names(actual_3_day)[1] <- 'Actual'; actual_3_day.df <- as.data.frame(actual_3_day);actual_3_day.ts = ts_ts(actual_3_day); actual_3_day.ts = ts(actual_3_day.ts, frequency = 24)
+actual_4_day <- stress.xts["2022-07-04/2022-07-07"] ; names(actual_4_day)[1] <- 'Actual'; actual_4_day.df <- as.data.frame(actual_4_day);actual_4_day.ts = ts_ts(actual_4_day); actual_4_day.ts = ts(actual_4_day.ts, frequency = 24)
+actual_5_day <- stress.xts["2022-07-04/2022-07-08"] ; names(actual_5_day)[1] <- 'Actual'; actual_5_day.df <- as.data.frame(actual_5_day);actual_5_day.ts = ts_ts(actual_5_day); actual_5_day.ts = ts(actual_5_day.ts, frequency = 24)
+actual_6_day <- stress.xts["2022-07-04/2022-07-09"] ; names(actual_6_day)[1] <- 'Actual'; actual_6_day.df <- as.data.frame(actual_6_day);actual_6_day.ts = ts_ts(actual_6_day); actual_6_day.ts = ts(actual_6_day.ts, frequency = 24)
 
 
 
-predicted_demohr_48hrs <- as.data.frame(forecastedhr) #pred is forecast and se is pred standard errors
-names(predicted_demohr_48hrs)[1] <- 'Predict_HR'
-names(predicted_demohr_48hrs)[2] <- 'Predict_HR_SE'
+#WEEKLY PREDICTION WINDOWS
+actual_1 <- stress.xts["2022-07-04/2022-07-10"] ; names(actual_1)[1] <- 'Actual'; actual_1.df <- as.data.frame(actual_1);actual_1.ts = ts_ts(actual_1); actual_1.ts = ts(actual_1.ts, frequency = 24)
+actual_2 <- stress.xts["2022-07-04/2022-07-17"] ; names(actual_2)[1] <- 'Actual'; actual_2.df <- as.data.frame(actual_2); actual_2.ts = ts_ts(actual_2); actual_2.ts = ts(actual_2.ts, frequency = 24)
+actual_4 <- stress.xts["2022-07-04/2022-07-31"] ; names(actual_4)[1] <- 'Actual'; actual_4.df <- as.data.frame(actual_4); actual_4.ts = ts_ts(actual_4); actual_4.ts = ts(actual_4.ts, frequency = 24)
+actual_6 <- stress.xts["2022-07-04/2022-08-14"] ; names(actual_6)[1] <- 'Actual'; actual_6.df <- as.data.frame(actual_6); actual_6.ts = ts_ts(actual_6); actual_6.ts = ts(actual_6.ts, frequency = 24)
+actual_8 <- stress.xts["2022-07-11/2022-09-04"] ; names(actual_8)[1] <- 'Actual'; actual_8.df <- as.data.frame(actual_8); actual_8.ts = ts_ts(actual_8); actual_8.ts = ts(actual_8.ts, frequency = 24)
 
-demo_actualhr_48hrs <- as.data.frame(demo.testhr.xts)
-names(demo_actualhr_48hrs)[1] <- 'Actual_HR'
-
-demo_ouputhr_df <- cbind(demo_actualhr_48hrs,predicted_demohr_48hrs)
-
-demo_histhr_df <-  as.data.frame(demo.histhr.xts)
-names(demo_histhr_df)[1] <- 'Historical_HR'
-
-
-####----------->>>>>>THERE YOU HAVE IT LADIES AND GENTLEMEN<<<<<------------####
-demo_histhr_df
-demo_ouputhr_df
+model_BM <- Arima(hist_data, order=c(4,0,1), seasonal=list(order=c(0,1,1),period=24))
+summary(model_BM)
+checkresiduals(model_BM)
 
 
-write.csv(demo_histhr_df,'F:\\Smith MMA\\MMA867 Predictive Modelling\\Term Project\\Final Code\\demo_histhr_df.csv', row.names = TRUE)
-write.csv(demo_ouputhr_df,'F:\\Smith MMA\\MMA867 Predictive Modelling\\Term Project\\Final Code\\demo_ouputhr_df.csv',row.names = TRUE)
+#### 1 DAY PREDICTION from 1 month history ####
+
+seasonal.naive_11day <- snaive(hist_data.ts,h=length(actual_1_day.ts))
+
+forecasted_SAR_11day= as.data.frame(sarima.for(hist_data,24,4,0,1,0,1,1,24)); names(forecasted_SAR_11day)[1] <- 'Pred_SAR'
+forecasted_NAIVE_11day <- as.data.frame(seasonal.naive_11day$mean); names(forecasted_NAIVE_11day)[1] <- 'Pred_Naive'
+
+test_11day_combo <- cbind(actual_1_day.df,forecasted_NAIVE_11day, forecasted_SAR_11day)
+
+SAR_11day_MSE <- mean((test_11day_combo$Pred_SAR-test_11day_combo$Actual)^2) #calculate and display MSE in the testing set
+SAR_11day_RMSE <- rmse(test_11day_combo$Actual, test_11day_combo$Pred_SAR) #calculate and display RMSE 
+SAR_11day_MAPE <- mape(test_11day_combo$Actual, test_11day_combo$Pred_SAR)*100
+
+NAIVE_11day_MSE <- mean((test_11day_combo$Pred_Naive-test_11day_combo$Actual)^2) 
+NAIVE_11day_RMSE <-rmse(test_11day_combo$Actual, test_11day_combo$Pred_Naive)
+NAIVE_11day_MAPE <-mape(test_11day_combo$Actual, test_11day_combo$Pred_Naive)*100
+
+#### 2 DAY PREDICTION from 1 month history ####
+
+seasonal.naive_12day <- snaive(hist_data.ts,h=length(actual_2_day.ts))
+
+forecasted_SAR_12day= as.data.frame(sarima.for(hist_data,48,4,0,1,0,1,1,24)); names(forecasted_SAR_12day)[1] <- 'Pred_SAR'
+forecasted_NAIVE_12day <- as.data.frame(seasonal.naive_12day$mean); names(forecasted_NAIVE_12day)[1] <- 'Pred_Naive'
+
+test_12day_combo <- cbind(actual_2_day.df,forecasted_NAIVE_12day, forecasted_SAR_12day)
+
+SAR_12day_MSE <- mean((test_12day_combo$Pred_SAR-test_12day_combo$Actual)^2) #calculate and display MSE in the testing set
+SAR_12day_RMSE <- rmse(test_12day_combo$Actual, test_12day_combo$Pred_SAR) #calculate and display RMSE 
+SAR_12day_MAPE <- mape(test_12day_combo$Actual, test_12day_combo$Pred_SAR)*100
+
+NAIVE_12day_MSE <- mean((test_12day_combo$Pred_Naive-test_12day_combo$Actual)^2) 
+NAIVE_12day_RMSE <-rmse(test_12day_combo$Actual, test_12day_combo$Pred_Naive)
+NAIVE_12day_MAPE <-mape(test_12day_combo$Actual, test_12day_combo$Pred_Naive)*100
 
 
-####----------->>>>>>Validate actual and forecast<<<<<------------####
+#### 3 DAY PREDICTION from 1 month history ####
+
+seasonal.naive_13day <- snaive(hist_data.ts,h=length(actual_3_day.ts))
+
+forecasted_SAR_13day= as.data.frame(sarima.for(hist_data,72,4,0,1,0,1,1,24)); names(forecasted_SAR_13day)[1] <- 'Pred_SAR'
+forecasted_NAIVE_13day <- as.data.frame(seasonal.naive_13day$mean); names(forecasted_NAIVE_13day)[1] <- 'Pred_Naive'
+
+test_13day_combo <- cbind(actual_3_day.df,forecasted_NAIVE_13day, forecasted_SAR_13day)
+
+SAR_13day_MSE <- mean((test_13day_combo$Pred_SAR-test_13day_combo$Actual)^2) #calculate and display MSE in the testing set
+SAR_13day_RMSE <- rmse(test_13day_combo$Actual, test_13day_combo$Pred_SAR) #calculate and display RMSE 
+SAR_13day_MAPE <- mape(test_13day_combo$Actual, test_13day_combo$Pred_SAR)*100
+
+NAIVE_13day_MSE <- mean((test_13day_combo$Pred_Naive-test_13day_combo$Actual)^2) 
+NAIVE_13day_RMSE <-rmse(test_13day_combo$Actual, test_13day_combo$Pred_Naive)
+NAIVE_13day_MAPE <-mape(test_13day_combo$Actual, test_13day_combo$Pred_Naive)*100
+
+#### 4 DAY PREDICTION from 1 month history ####
+seasonal.naive_14day <- snaive(hist_data.ts,h=length(actual_4_day.ts))
+
+forecasted_SAR_14day= as.data.frame(sarima.for(hist_data,96,4,0,1,0,1,1,24)); names(forecasted_SAR_14day)[1] <- 'Pred_SAR'
+forecasted_NAIVE_14day <- as.data.frame(seasonal.naive_14day$mean); names(forecasted_NAIVE_14day)[1] <- 'Pred_Naive'
+
+test_14day_combo <- cbind(actual_4_day.df,forecasted_NAIVE_14day, forecasted_SAR_14day)
+
+SAR_14day_MSE <- mean((test_14day_combo$Pred_SAR-test_14day_combo$Actual)^2) #calculate and display MSE in the testing set
+SAR_14day_RMSE <- rmse(test_14day_combo$Actual, test_14day_combo$Pred_SAR) #calculate and display RMSE 
+SAR_14day_MAPE <- mape(test_14day_combo$Actual, test_14day_combo$Pred_SAR)*100
+
+NAIVE_14day_MSE <- mean((test_14day_combo$Pred_Naive-test_14day_combo$Actual)^2) 
+NAIVE_14day_RMSE <-rmse(test_14day_combo$Actual, test_14day_combo$Pred_Naive)
+NAIVE_14day_MAPE <-mape(test_14day_combo$Actual, test_14day_combo$Pred_Naive)*100
+
+#### 5 DAY PREDICTION from 1 month history ####
+seasonal.naive_15day <- snaive(hist_data.ts,h=length(actual_5_day.ts))
+
+forecasted_SAR_15day= as.data.frame(sarima.for(hist_data,120,4,0,1,0,1,1,24)); names(forecasted_SAR_15day)[1] <- 'Pred_SAR'
+forecasted_NAIVE_15day <- as.data.frame(seasonal.naive_15day$mean); names(forecasted_NAIVE_15day)[1] <- 'Pred_Naive'
+
+test_15day_combo <- cbind(actual_5_day.df,forecasted_NAIVE_15day, forecasted_SAR_15day)
+
+SAR_15day_MSE <- mean((test_15day_combo$Pred_SAR-test_15day_combo$Actual)^2) #calculate and display MSE in the testing set
+SAR_15day_RMSE <- rmse(test_15day_combo$Actual, test_15day_combo$Pred_SAR) #calculate and display RMSE 
+SAR_15day_MAPE <- mape(test_15day_combo$Actual, test_15day_combo$Pred_SAR)*100
+
+NAIVE_15day_MSE <- mean((test_15day_combo$Pred_Naive-test_15day_combo$Actual)^2) 
+NAIVE_15day_RMSE <-rmse(test_15day_combo$Actual, test_15day_combo$Pred_Naive)
+NAIVE_15day_MAPE <-mape(test_15day_combo$Actual, test_15day_combo$Pred_Naive)*100
+
+#### 6 DAY PREDICTION from 1 month history ####
+
+seasonal.naive_16day <- snaive(hist_data.ts,h=length(actual_6_day.ts))
+
+forecasted_SAR_16day= as.data.frame(sarima.for(hist_data,144,4,0,1,0,1,1,24)); names(forecasted_SAR_16day)[1] <- 'Pred_SAR'
+forecasted_NAIVE_16day <- as.data.frame(seasonal.naive_16day$mean); names(forecasted_NAIVE_16day)[1] <- 'Pred_Naive'
+
+test_16day_combo <- cbind(actual_6_day.df,forecasted_NAIVE_16day, forecasted_SAR_16day)
+
+SAR_16day_MSE <- mean((test_16day_combo$Pred_SAR-test_16day_combo$Actual)^2) #calculate and display MSE in the testing set
+SAR_16day_RMSE <- rmse(test_16day_combo$Actual, test_16day_combo$Pred_SAR) #calculate and display RMSE 
+SAR_16day_MAPE <- mape(test_16day_combo$Actual, test_16day_combo$Pred_SAR)*100
+
+NAIVE_16day_MSE <- mean((test_16day_combo$Pred_Naive-test_16day_combo$Actual)^2) 
+NAIVE_16day_RMSE <-rmse(test_16day_combo$Actual, test_16day_combo$Pred_Naive)
+NAIVE_16day_MAPE <-mape(test_16day_combo$Actual, test_16day_combo$Pred_Naive)*100
 
 
-demo_ouputhr_df.xts <- as.xts(demo_ouputhr_df)
 
-myplot <- plot.xts(demo_ouputhr_df.xts$Actual_HR, main = "Actual vs Forecasted HR", lwd = 3, grid.col = NA, col = "Blue")
-lines(demo_ouputhr_df.xts$Predict_HR, col = "Red", lwd = 3)
+#### 1 WEEK PREDICTION from 1 month history - ****USE THIS FOR PRESENTATION**** ####
+#
+SAR_11_MODEL <- Arima(hist_data, order=c(4,0,1), seasonal=list(order=c(0,1,1),period=24))
+#model_3_SARIMA_2 <- sarima(PAST_2.xts,4,0,1,0,1,1,24) #using SARIMA function
+summary(SAR_11_MODEL)
+checkresiduals(SAR_11_MODEL)
+#
+
+seasonal.naive_11 <- snaive(hist_data.ts,h=length(actual_1.ts))
+
+forecasted_SAR_11= as.data.frame(sarima.for(hist_data,168,4,0,1,0,1,1,24)); names(forecasted_SAR_11)[1] <- 'Pred_SAR'
+forecasted_NAIVE_11 <- as.data.frame(seasonal.naive_11$mean); names(forecasted_NAIVE_11)[1] <- 'Pred_Naive'
+
+test_11_combo <- cbind(actual_1.df,forecasted_NAIVE_11, forecasted_SAR_11)
+
+SAR_11_MSE <- mean((test_11_combo$Pred_SAR-test_11_combo$Actual)^2) #calculate and display MSE in the testing set
+SAR_11_RMSE <- rmse(test_11_combo$Actual, test_11_combo$Pred_SAR) #calculate and display RMSE 
+SAR_11_MAPE <- mape(test_11_combo$Actual, test_11_combo$Pred_SAR)*100
+
+NAIVE_11_MSE <- mean((test_11_combo$Pred_Naive-test_11_combo$Actual)^2) 
+NAIVE_11_RMSE <-rmse(test_11_combo$Actual, test_11_combo$Pred_Naive)
+NAIVE_11_MAPE <-mape(test_11_combo$Actual, test_11_combo$Pred_Naive)*100
 
 
-fcHR_MSE <- mean((demo_ouputhr_df$Predict_HR-demo_ouputhr_df$Actual_HR)^2) #calculate and display MSE in the testing set
-fcHR_RMSE <- rmse(demo_ouputhr_df$Actual_HR, demo_ouputhr_df$Predict_HR) #calculate and display RMSE 
-fcHR_MAPE <-mean(abs(demo_ouputhr_df$Predict_HR-demo_ouputhr_df$Actual_HR)/demo_ouputhr_df$Actual_HR*100)
+#### 2 WEEK PREDICTION from 1 month history ####
+seasonal.naive_12 <- snaive(hist_data.ts,h=length(actual_2.ts))
+
+forecasted_SAR_12= as.data.frame(sarima.for(hist_data,336,4,0,1,0,1,1,24)); names(forecasted_SAR_12)[1] <- 'Pred_SAR'
+forecasted_NAIVE_12 <- as.data.frame(seasonal.naive_12$mean); names(forecasted_NAIVE_12)[1] <- 'Pred_Naive'
+
+test_12_combo = cbind(actual_2.df,forecasted_NAIVE_12, forecasted_SAR_12)
+
+SAR_12_MSE <- mean((test_12_combo$Pred_SAR-test_12_combo$Actual)^2) #calculate and display MSE in the testing set
+SAR_12_RMSE <- rmse(test_12_combo$Actual, test_12_combo$Pred_SAR) #calculate and display RMSE 
+SAR_12_MAPE <- mape(test_12_combo$Actual, test_12_combo$Pred_SAR)*100
+
+NAIVE_12_MSE <- mean((test_12_combo$Pred_Naive-test_12_combo$Actual)^2) 
+NAIVE_12_RMSE <-rmse(test_12_combo$Actual, test_12_combo$Pred_Naive)
+NAIVE_12_MAPE <-mape(test_12_combo$Actual, test_12_combo$Pred_Naive)*100
+
+
+
+
+#### 4 WEEK PREDICTION from 1 month history ####
+
+seasonal.naive_14 <- snaive(hist_data.ts,h=length(actual_4.ts))
+
+forecasted_SAR_14= as.data.frame(sarima.for(hist_data,672,4,0,1,0,1,1,24)); names(forecasted_SAR_14)[1] <- 'Pred_SAR'
+forecasted_NAIVE_14 <- as.data.frame(seasonal.naive_14$mean); names(forecasted_NAIVE_14)[1] <- 'Pred_Naive'
+
+test_14_combo = cbind(actual_4.df,forecasted_NAIVE_14, forecasted_SAR_14)
+
+SAR_14_MSE <- mean((test_14_combo$Pred_SAR-test_14_combo$Actual)^2) #calculate and display MSE in the testing set
+SAR_14_RMSE <- rmse(test_14_combo$Actual, test_14_combo$Pred_SAR) #calculate and display RMSE 
+SAR_14_MAPE <- mape(test_14_combo$Actual, test_14_combo$Pred_SAR)*100
+
+NAIVE_14_MSE <- mean((test_14_combo$Pred_Naive-test_14_combo$Actual)^2) 
+NAIVE_14_RMSE <-rmse(test_14_combo$Actual, test_14_combo$Pred_Naive)
+NAIVE_14_MAPE <-mape(test_14_combo$Actual, test_14_combo$Pred_Naive)*100
+
+#### 6 WEEK PREDICTION from 1 month history ####
+
+seasonal.naive_16 <- snaive(hist_data.ts,h=length(actual_6.ts))
+
+forecasted_SAR_16= as.data.frame(sarima.for(hist_data,1008,4,0,1,0,1,1,24)); names(forecasted_SAR_16)[1] <- 'Pred_SAR'
+forecasted_NAIVE_16 <- as.data.frame(seasonal.naive_16$mean); names(forecasted_NAIVE_16)[1] <- 'Pred_Naive'
+
+test_16_combo = cbind(actual_6.df,forecasted_NAIVE_16, forecasted_SAR_16)
+
+SAR_16_MSE <- mean((test_16_combo$Pred_SAR-test_16_combo$Actual)^2) #calculate and display MSE in the testing set
+SAR_16_RMSE <- rmse(test_16_combo$Actual, test_16_combo$Pred_SAR) #calculate and display RMSE 
+SAR_16_MAPE <- mape(test_16_combo$Actual, test_16_combo$Pred_SAR)*100
+
+NAIVE_16_MSE <- mean((test_16_combo$Pred_Naive-test_16_combo$Actual)^2) 
+NAIVE_16_RMSE <-rmse(test_16_combo$Actual, test_16_combo$Pred_Naive)
+NAIVE_16_MAPE <-mape(test_16_combo$Actual, test_16_combo$Pred_Naive)*100
+
+#### 8 WEEK PREDICTION from 1 month history ####
+seasonal.naive_18 <- snaive(hist_data.ts,h=length(actual_8.ts))
+
+forecasted_SAR_18= as.data.frame(sarima.for(hist_data,1344,4,0,1,0,1,1,24)); names(forecasted_SAR_18)[1] <- 'Pred_SAR'
+forecasted_NAIVE_18 <- as.data.frame(seasonal.naive_18$mean); names(forecasted_NAIVE_18)[1] <- 'Pred_Naive'
+
+test_18_combo = cbind(actual_8.df,forecasted_NAIVE_18, forecasted_SAR_18)
+
+SAR_18_MSE <- mean((test_18_combo$Pred_SAR-test_18_combo$Actual)^2) #calculate and display MSE in the testing set
+SAR_18_RMSE <- rmse(test_18_combo$Actual, test_18_combo$Pred_SAR) #calculate and display RMSE 
+SAR_18_MAPE <- mape(test_18_combo$Actual, test_18_combo$Pred_SAR)*100
+
+NAIVE_18_MSE <- mean((test_18_combo$Pred_Naive-test_18_combo$Actual)^2) 
+NAIVE_18_RMSE <-rmse(test_18_combo$Actual, test_18_combo$Pred_Naive)
+NAIVE_18_MAPE <-mape(test_18_combo$Actual, test_18_combo$Pred_Naive)*100
+
+#
+
+
+# 1 mon
+
+
+
+
+
+
+####----> Extract Model Performance Results ####
+
+#NAIVE Results
+NAIVE_11day_RMSE; NAIVE_12day_RMSE; NAIVE_13day_RMSE; NAIVE_14day_RMSE; NAIVE_15day_RMSE; NAIVE_16day_RMSE;
+NAIVE_11_RMSE; NAIVE_12_RMSE; NAIVE_14_RMSE; NAIVE_16_RMSE; NAIVE_18_RMSE;
+
+SAR_11day_RMSE; SAR_12day_RMSE; SAR_13day_RMSE; SAR_14day_RMSE; SAR_15day_RMSE; SAR_16day_RMSE;
+SAR_11_RMSE; SAR_12_RMSE; SAR_14_RMSE; SAR_16_RMSE; SAR_18_RMSE;
+
 

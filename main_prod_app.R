@@ -196,7 +196,7 @@ interval <- 24
 prediction_window = 48 #NEXT 48 HOURS
 
 #PREDICTION OF September 9-10
-forecasted = sarima.for(demo.hist.xts,prediction_window,p,d,q,P,D,Q,interval)
+forecasted = sarima.for(demo.hist.xts,prediction_window,p,d,q,P,D,Q,interval, plot.all = TRUE)
 
 predicted_demo_48hrs <- as.data.frame(forecasted) #pred is forcast and se is pred standard errors
 names(predicted_demo_48hrs)[1] <- 'Predict_Stress'
@@ -209,6 +209,10 @@ demo_ouput_df <- cbind(demo_actual_48hrs,predicted_demo_48hrs)
 
 demo_hist_df <-  as.data.frame(demo.hist.xts)
 names(demo_hist_df)[1] <- 'Historical Stress'
+
+myforecasts <- forecast::forecast(elecequip_sarima2, h=40) 
+## plot the forecasts
+autoplot(forecasted$pred) + autolayer(elecequip_ts) + xlim(2005,2013) 
 
 
 ####----------->>>>>>THERE YOU HAVE IT LADIES AND GENTLEMEN<<<<<------------####

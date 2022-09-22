@@ -1,1 +1,3 @@
 # garmin-predictive-modeling
+
+In this project, we were asked to experiment with a real world datasets, and to explore.....
