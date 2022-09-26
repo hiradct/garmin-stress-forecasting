@@ -227,12 +227,14 @@ plot.ts(PAST_4.ts)
 data_d <- ts(PAST_4.ts, frequency = 24) 
 fit_d <- stl(data_d,"periodic") # estimate the daily cyclical component
 autoplot(fit_d)
+summary(fit_d)
 
 
-#Decompose on weekly
-data_w <- ts(PAST_4.ts, frequency = 168) 
-fit_w <- stl(data_w,"periodic") # estimate the daily cyclical component
-autoplot(fit_w)
+#Decompose daily, seasonality window = 24hr
+fit_d_1 <- stl(data_d,s.window = 24) # estimate the daily cyclical component
+autoplot(fit_d_1)
+summary(fit_d_1)
+
 
 
 #### STEP_9 - Check for hetero Does the variance increases with mean (heteroscedasticity)?-----
