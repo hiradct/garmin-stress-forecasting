@@ -1,5 +1,6 @@
 #### STEP_1 - Load libraries ####
 library(ggplot2)
+library(mosaic)
 library(dplyr)
 library(tidyr)
 library(stringr)
@@ -14,16 +15,16 @@ library(caret)
 library(GGally)
 library(ggcorrplot)
 #install.packages("mosaic")
-library(mosaic)
 library(pROC)
 library(Hmisc)
-install.packages('Metrics')
+#install.packages('Metrics')
 library(forecast)
 library(naniar)
 library(Metrics)
 
 
 #### STEP_2 - Read the data - READ ONLY LATEST FINAL CSV ####
+#this is slightly revised version of raw data from ETL stage
 garmin_raw_data <- read.csv('/Users/hiradch/Desktop/garmin-predictive-modeling/garmin_upd.csv')
 
 #select only times, HR and stress
@@ -49,122 +50,82 @@ garmin_series <- select(garmin_raw_df,1,4,6,5,7:8,2,3)
 ## REMOVE SOME WEEKS 
 #--->1) WEEK #19-22 - first week reading on device is not as accurate
 
-#reorder columns
-garmin_series <- select(garmin_raw_df,1,4,6,5,7:8,2,3)
+
+#spot check of series
+library(naniar)
+library("imputeTS")
+ggplot_na_distribution(garmin_series$stressLevel, x_axis_labels = garmin_series$date)
+ggplot_na_intervals(garmin_series$stressLevel, interval_size = 720,color_missing = "gold3")
+ggplot_na_distribution(garmin_series$stressLevel)
 
 ## REMOVE SOME WEEKS 
 #--->1) WEEK #19-22 - first week reading on device is not as accurate
+garmin_df <-garmin_series[!(garmin_series$week %in% c(19,20,21,22)),]
+
 #---> Remaining Weeks --.> 23-36 --> 14 weeks
+describe(garmin_df$week)
 # Value         23    24    25    26    27    28    29    30    31    32    33    34    35    36
 # Frequency   5040  5040  5040  5040  5040  5040  5040  5040  5040  5040  5040  5040  5040  4321
 # Proportion 0.072 0.072 0.072 0.072 0.072 0.072 0.072 0.072 0.072 0.072 0.072 0.072 0.072 0.062
 
-library(naniar)
-library("imputeTS")
-
-# statsNA(garmin_series$heartRate) 
-# statsNA(garmin_series$stressLevel)
-# ggplot_na_intervals(garmin_series$heartRate, interval_size = 720, measure = "count",color_missing = "gold3")
-# ggplot_na_distribution(garmin_series$heartRate, x_axis_labels = garmin_series$date)
-# # ggplot_na_intervals(garmin_series_f$heartRate, interval_size = 720,color_missing = "gold3")
-ggplot_na_distribution(garmin_series$stressLevel, x_axis_labels = garmin_series$date)
-ggplot_na_intervals(garmin_series$stressLevel, interval_size = 720,color_missing = "gold3")
-
-garmin_df <-garmin_series[!(garmin_series$week %in% c(19,20,21,22)),]
-ggplot_na_distribution(garmin_df$stressLevel, x_axis_labels = garmin_df$timestamp)
-
-plot.ts(as.ts(garmin_df$stressLevel))
-
-#REMOVED 5,000 datapoints, from 13 to 10 weeks
-
-describe(garmin_df)
 #Fill -1,-2 and NAs in Stress
 garmin_df_2 <- garmin_df %>% replace_with_na(replace = list(stressLevel = c(-1,-2)))
+
+plot.ts(as.ts(garmin_df_2$stressLevel))
 describe(garmin_df_2)
 
-
-#### STEP_4 - Visualize Missing Values/GAPS #####
-
-## Visualize Time-series and remaining gaps to impute
-#HEART RATE
-ggplot_na_distribution(garmin_df_2$heartRate, x_axis_labels = garmin_df_2$timestamp)
-ggplot_na_distribution(garmin_df_2$stressLevel, x_axis_labels = garmin_df_2$timestamp)
+#### STEP_4 - Impute Missing Values/GAPS #####
 
 ##-----> Visualize Missing on MONTHLY slices
-#HEART RATE
-m6 = garmin_df_2[garmin_df_2$month ==6,]
-m7 = garmin_df_2[garmin_df_2$month ==7,]
-m8 = garmin_df_2[garmin_df_2$month ==8,]
-
-ggplot_na_distribution(m6$heartRate)
-ggplot_na_distribution(m7$heartRate)
-ggplot_na_distribution(m8$heartRate)
-
-## STRESS LEVEL 
-ggplot_na_distribution(m6$stressLevel)
-ggplot_na_distribution(m7$stressLevel)
-ggplot_na_distribution(m8$stressLevel)
-
-
-
-#### STEP_5 - Impute Gaps in HR & Stress ####
-library(naniar)
-library("imputeTS")
-##useful link --> https://cran.r-project.org/web/packages/imputeTS/vignettes/gallery_visualizations.html
-
-#heartRate
-statsNA(garmin_df_2$heartRate) # 17.1% missing with 212 gaps, ave gap of 47.6 datapoints
-#stressLevel
-statsNA(garmin_df_2$stressLevel) # 28.2% missing with 1714 gaps, ave gap of 9.7 --> only 20min
-
-#SINCE THE AVE.GAP is 20min, we should resample to hourly instead of 2-min intervals
-
-## IMPUTE ---> HEART RATE- Missing Value Imputation by Last Observation Carried Forward
-#https://steffenmoritz.github.io/imputeTS/reference/na_locf.html
-imp4<-na_locf(garmin_df_2$heartRate)
-ggplot_na_imputations(garmin_df_2$heartRate, imp4)
+#m6 = garmin_df_2[garmin_df_2$month ==6,]
+#m7 = garmin_df_2[garmin_df_2$month ==7,]
+#m8 = garmin_df_2[garmin_df_2$month ==8,]
+#ggplot_na_distribution(m6$stressLevel)
+#ggplot_na_distribution(m7$stressLevel)
+#ggplot_na_distribution(m8$stressLevel)
 
 ## IMPUTE ---> STRESS LEVEL - Missing Value Imputation by Linear interpolation
+#https://steffenmoritz.github.io/imputeTS/reference/na_locf.html
+
+#stressLevel
+statsNA(garmin_df_2$stressLevel) # 27.2% missing with 2061 gaps, ave gap of 9.2 datapoint akaonly 20min
+
+#what would the immputed series look like?
 imp1<-na_interpolation(garmin_df_2$stressLevel)
 ggplot_na_imputations(garmin_df_2$stressLevel, imp1)
 
-
+#perform imputation
 garmin_df_inter <- garmin_df_2
 garmin_df_inter$stressLevel <-na_interpolation(garmin_df_2$stressLevel)
-garmin_df_inter$heartRate <-na_locf(garmin_df_2$heartRate)
 
-#---> RAW IMPUTED TIME SERIES PLOTS
+#---> Visualize the IMPUTED TIME SERIES PLOTS
 ggplot_na_distribution(garmin_df_inter$stressLevel)
-ggplot_na_distribution(garmin_df_inter$heartRate)
 
-str(garmin_df_inter)
-
-
-#### STEP_6 - Resample to Hourly ####
+#### STEP_5 - Resample to Hourly #####
 
 #-Create separate data frames
 garmin_df_stress = garmin_df_inter[,c(1,8)]
-garmin_df_hr =  garmin_df_inter[,c(1,7)]
 
+#SINCE THE AVE.GAP is 20min, we should resample to hourly instead of 2-min intervals
 #-Resample from 2-min to hourly series w/ averaging
 garmin_df_stress$timestamp2 <- droplevels(cut(garmin_df_stress$timestamp, breaks='hour'))
 ### This calculate the mean of stress in each hour at each date.
 garmin_df_stress.hourly <- aggregate(stressLevel ~ timestamp2, data=garmin_df_stress, FUN=mean) 
 garmin_df_stress.hourly$timestamp2 <- as.POSIXct(garmin_df_stress.hourly$timestamp2, tz = "UTC" )
-
-garmin_df_hr$timestamp2 <- droplevels(cut(garmin_df_hr$timestamp, breaks='hour'))
-### This calculate the mean of stress in each hour at each date.
-garmin_df_hr.hourly <- aggregate(heartRate ~ timestamp2, data=garmin_df_hr, FUN=mean) 
-garmin_df_hr.hourly$timestamp2 <- as.POSIXct(garmin_df_hr.hourly$timestamp2, tz = "UTC" )
-
 #round the stress and hr decimals to 2 decimal points
 garmin_df_stress.hourly$stressLevel <- as.integer(round(garmin_df_stress.hourly$stressLevel, 0))
-garmin_df_hr.hourly$heartRate <- as.integer(round(garmin_df_hr.hourly$heartRate, 0))
 
+ggplot_na_distribution(garmin_df_stress.hourly$stressLevel)
+plot.ts(as.ts(garmin_df_stress.hourly$stressLevel))
+
+
+#### STEP_6 -  Visualize the pre-processed stress time-series #####
+
+ggplot_na_distribution(garmin_df_stress.hourly$stressLevel)
+plot.ts(as.ts(garmin_df_stress.hourly$stressLevel))
 
 
 #### STEP_7 - Split data into diff training hist Vectors + one week prediction period ####
-
 
 # Datasets --> garmin_df_stress.hourly & garmin_df_hr.hourly
 #---lowest : 2022-06-06 00:00:00
@@ -176,15 +137,6 @@ stress.xts <- as.xts(garmin_df_stress.hourly[,"stressLevel"],garmin_df_stress.ho
 plot.xts(stress.xts)
 library(tsbox)
 stress.ts <-ts_ts(stress.xts)
-
-# 4 day prediction from 7 day history
-
-#DEMO Forecast Set --> ["2022-09-09/2022-09-10"] (2 days)
-#TEST --> ["2022-09-05/022-09-08"] (4 days)
-
-# demo.test.xts <- stress.xts["2022-09-09/"]
-# demo.hist.xts = stress.xts["2022-09-01/2022-09-08"]
-TEST.xts = stress.xts["2022-09-05/2022-09-08"] 
 
 #PAST_1 --> ["2022-08-29/2022-09-04"] (1 week) (7 days) (Mon-Sunday)
 #PAST_2 --> ["2022-08-22/2022-09-04"] (2 weeks) (14 days)
@@ -198,8 +150,7 @@ PAST_4.xts = stress.xts["2022-08-08/2022-09-04"]
 PAST_8.xts = stress.xts["2022-07-11/2022-09-04"]
 PAST_12.xts = stress.xts["2022-06-13/2022-09-08"]
 
-
-
+TEST.xts = stress.xts["2022-09-05/2022-09-08"] 
 
 # #train.xts = stress.xts["2022-06-08/2022-09-08"] #train set of 3 months
 # #train.xts = stress.xts["2022-07-08/2022-09-08"] #train set of 2 months
@@ -222,30 +173,36 @@ plot.xts(PAST_4.xts)
 PAST_4.ts <- ts_ts(PAST_4.xts)
 plot.ts(PAST_4.ts)
 
-
-#Decompose on daily
-data_d <- ts(PAST_4.ts, frequency = 24) 
-fit_d <- stl(data_d,"periodic") # estimate the daily cyclical component
-autoplot(fit_d)
-summary(fit_d)
-
-
 #Decompose daily, seasonality window = 24hr
+data_d <- ts(PAST_4.ts, frequency = 24) 
 fit_d_1 <- stl(data_d,s.window = 24) # estimate the daily cyclical component
 autoplot(fit_d_1)
 summary(fit_d_1)
 
 
 
-#### STEP_9 - Check for hetero Does the variance increases with mean (heteroscedasticity)?-----
+#### STEP_9 - Testing for STATIONARITY & Heteroscedasticity ####
 #--> Statistical Testing -->  NO HETERO
 
 #The McLeod-Li test is a version of the Ljung-Box test for autocorrelation based on the squared data.
 #The alternative hypothesis is that the data have autoregressive conditional heteroscedasticity (ARCH).
+
+#test on entire 14-weeks data
 library(TSA)
-a =diff(log(train.xts))*100
+a =diff(log(stress.xts))*100
 McLeod.Li.test(y=a)
 
+#test on 2-week samples
+library(TSA)
+b =diff(log(stress.xts["2022-08-22/2022-09-04"] ))*100
+McLeod.Li.test(y=b)
+
+#test on 4-week samples
+library(TSA)
+c =diff(log(stress.xts["2022-08-08/2022-09-04"]))*100
+McLeod.Li.test(y=c)
+
+stress.xts["2022-08-08/2022-09-04"] 
 #------------De-trending-----------#
 
 #--from the plot we see that our Stress series has variable trend but non-increasing over the week
@@ -260,7 +217,9 @@ train.ts_deSeason_diff = diff(train.ts_deSeason,1)
 #The null hypothesis assumes that the series is non-stationary.
 #p-value=0.01, rejects the null. the series is stationary
 library(astsa)
-adf.test(train.ts_deSeason_diff,alternative = "stationary") #hmm...sounds like it is stationarty to me..
+adf.test(stress.xts,alternative = "stationary") 
+adf.test(PAST_1.xts,alternative = "stationary") 
+adf.test(PAST_2.xts,alternative = "stationary") 
 
 # Autocorrelation & Partial-Autocorrelation 
 library(astsa)
@@ -309,8 +268,6 @@ plot.ts(train.ts_deSeason_diff) #TAKE OUT TRENDING
 
 model_1b <- auto.arima(PAST_1.xts, seasonal= TRUE,approximation = FALSE,trace=TRUE, stepwise = FALSE, max.p = 10, max.q = 10) #Fit using the Hyndman-Khandakar algorithm (Hyndman & Khandakar, 2008)
 checkresiduals(model_1) # The p-values for the Ljung–Box statistics are LARGE,--> ARIMA is sufficient 
-#....indicating there is some pattern in the residuals. There is still information to be extracted from the data.
-# so this means that the daily cyclical pattern requires us to use SARIMA instead of ARIMA
 
 
 #Manually incorporate order=c(0,1,1) for seasonal component
@@ -319,7 +276,7 @@ summary(model_1_SARIMA)
 checkresiduals(model_1_SARIMA)
 #sarima is a better fit
 
-model_1
+
 model_1_SARIMA
 
 ## MODEL#1 EVAL --> Past 1 Test --> fcp1_RMSE = 18.43 #####
@@ -336,6 +293,8 @@ fcp1_MSE <- mean((TEST1_PAST_1_comb$Predicted_Stress-TEST1_PAST_1_comb$Actual_St
 #MSE, is calculated as the average of the squared forecast error values. Squaring the forecast error values forces them to be positive; 
 #it also has the effect of putting more weight on large errors.
 fcp1_RMSE <- rmse(TEST1_PAST_1_comb$Actual_Stress, TEST1_PAST_1_comb$Predicted_Stress) #calculate and display RMSE 
+fcp1_MAPE <- mape(TEST1_PAST_1_comb$Actual_Stress, TEST1_PAST_1_comb$Predicted_Stress)
+
 # MSE can be transformed back into the original units of the predictions by taking the square root of the mean squared error score
 
 TEST1_PAST_1_comb.xts <- as.xts(TEST1_PAST_1_comb)
@@ -345,11 +304,9 @@ lines(TEST1_PAST_1_comb.xts$Predicted_Stress, col = "Red", lwd = 3)
 
 
 
-## MODEL#2 DEV --> Two Week Training Window, Trained Model --> (4,0,1)(0,1,1) ####
+## MODEL#2 DEV --> **** FINAL MODEL **** Two Week Training Window, Trained Model --> (4,0,1)(0,1,1) ####
 
-model_2 <- auto.arima(PAST_2.xts,seasonal= TRUE,approximation = FALSE,trace=TRUE, stepwise = FALSE, max.p = 10, max.q = 10) #Fit using the Hyndman-Khandakar algorithm (Hyndman & Khandakar, 2008)
-
-checkresiduals(model_2) 
+model_2 <- auto.arima(PAST_2.xts,seasonal= TRUE,approximation = FALSE,trace=TRUE, stepwise = FALSE, max.p = 10, max.q = 10) 
 summary(model_2)
 
 model_2_SARIMA <- Arima(PAST_2.xts, order=c(4,0,1), seasonal=list(order=c(0,1,1),period=24))
@@ -357,14 +314,11 @@ model_2_SARIMA <- Arima(PAST_2.xts, order=c(4,0,1), seasonal=list(order=c(0,1,1)
 summary(model_2_SARIMA)
 checkresiduals(model_2_SARIMA)
 
-
-model_2
-model_3_SARIMA
+model_2_SARIMA
 
 ## MODEL#2 EVAL --> Past 2 Test --> fcp2_RMSE = 15.80776 #####
 
 forecasted_past2 = sarima.for(PAST_2.xts,96,4,0,1,0,1,1,24)
-
 forecasted_past2_df <- as.data.frame(forecasted_past2) #input forecasts to dataframe
 #TEST1_df <- as.data.frame(TEST.xts) #input actuals to dataframe
 names(forecasted_past2_df)[1] <- 'Predicted_Stress'
@@ -373,16 +327,16 @@ TEST1_PAST_2_comb<- cbind(forecasted_past2_df,TEST1_df)
 
 fcp2_MSE <- mean((TEST1_PAST_2_comb$Predicted_Stress-TEST1_PAST_2_comb$Actual_Stress)^2) #calculate and display MSE in the testing set
 fcp2_RMSE <- rmse(TEST1_PAST_2_comb$Actual_Stress, TEST1_PAST_2_comb$Predicted_Stress) #calculate and display RMSE 
+fcp2_MAPE <- mape(TEST1_PAST_2_comb$Actual_Stress, TEST1_PAST_2_comb$Predicted_Stress)
 
 TEST1_PAST_2_comb.xts <- as.xts(TEST1_PAST_2_comb)
 
 myplot_test1 <- plot.xts(TEST1_PAST_2_comb.xts$Actual_Stress, main = "Actual vs Forecasted Stress", lwd = 3, grid.col = NA, col = "Blue")
 lines(TEST1_PAST_2_comb.xts$Predicted_Stress, col = "Red", lwd = 3)
-
 fcp2_RMSE
 
 
-## MODEL#3 DEV --> **** FINAL MODEL **** Four Week Training Window, Trained Model --> (4,0,1)(0,1,1) ####
+## MODEL#3 DEV --> Four Week Training Window, Trained Model --> (4,0,1)(0,1,1) ####
 
 model_3 <- auto.arima(PAST_4.xts, max.order = 20,seasonal= TRUE,approximation = FALSE,trace=TRUE, stepwise = FALSE) #Fit using the Hyndman-Khandakar algorithm (Hyndman & Khandakar, 2008)
 # model_3b <- auto.arima(PAST_4.xts,D=1,seasonal= TRUE,approximation = FALSE,trace=TRUE, stepwise = FALSE)
@@ -414,6 +368,7 @@ TEST1_PAST_4_comb<- cbind(forecasted_past4_df,TEST1_df)
 
 fcp4_MSE <- mean((TEST1_PAST_4_comb$Predicted_Stress-TEST1_PAST_4_comb$Actual_Stress)^2) #calculate and display MSE in the testing set
 fcp4_RMSE <- rmse(TEST1_PAST_4_comb$Actual_Stress, TEST1_PAST_4_comb$Predicted_Stress) #calculate and display RMSE 
+fcp4_MAPE <- mape(TEST1_PAST_4_comb$Actual_Stress, TEST1_PAST_4_comb$Predicted_Stress)
 
 TEST1_PAST_4_comb.xts <- as.xts(TEST1_PAST_4_comb)
 
@@ -458,6 +413,7 @@ TEST1_PAST_8_comb<- cbind(forecasted_past8_df,TEST1_df)
 
 fcp8_MSE <- mean((TEST1_PAST_8_comb$Predicted_Stress-TEST1_PAST_8_comb$Actual_Stress)^2) #calculate and display MSE in the testing set
 fcp8_RMSE <- rmse(TEST1_PAST_8_comb$Actual_Stress, TEST1_PAST_8_comb$Predicted_Stress) #calculate and display RMSE 
+fcp8_MAPE <- mape(TEST1_PAST_8_comb$Actual_Stress, TEST1_PAST_8_comb$Predicted_Stress)
 
 TEST1_PAST_8_comb.xts <- as.xts(TEST1_PAST_8_comb)
 
@@ -477,10 +433,10 @@ measures(ts_ts(PAST_12.xts))
 checkresiduals(model_5) 
 summary(model_5)
 
-model_4_SARIMA <- Arima(PAST_8.xts, order=c(2,0,4), seasonal=list(order=c(0,1,1),period=24))
+model_5_SARIMA <- Arima(PAST_8.xts, order=c(2,0,4), seasonal=list(order=c(0,1,1),period=24))
 #model_3_SARIMA_2 <- sarima(PAST_2.xts,4,0,1,0,1,1,24) #using SARIMA function
-summary(model_4_SARIMA)
-checkresiduals(model_4_SARIMA)
+summary(model_5_SARIMA)
+checkresiduals(model_5_SARIMA)
 
 ## MODEL#5 EVAL --> Past 12 Test --> fcp12_RMSE =  15.45822 #####
 
@@ -494,6 +450,7 @@ TEST1_PAST_12_comb<- cbind(forecasted_past12_df,TEST1_df)
 
 fcp12_MSE <- mean((TEST1_PAST_12_comb$Predicted_Stress-TEST1_PAST_12_comb$Actual_Stress)^2) #calculate and display MSE in the testing set
 fcp12_RMSE <- rmse(TEST1_PAST_12_comb$Actual_Stress, TEST1_PAST_12_comb$Predicted_Stress) #calculate and display RMSE 
+fcp12_MAPE <- mape(TEST1_PAST_12_comb$Actual_Stress, TEST1_PAST_12_comb$Predicted_Stress)
 
 TEST1_PAST_12_comb.xts <- as.xts(TEST1_PAST_12_comb)
 
@@ -513,7 +470,50 @@ fcp12_RMSE
 
 
 
-#### STEP_11 - NAIVE VS SARIMA Benchmarking & Performance ####
+
+####------> Comparison of Trained Models  --->  #### 
+
+## Summary of Model Performance in TRAINING
+summary(model_1_SARIMA)
+#AIC=1116.63   AICc=1116.91   BIC=1128.51
+#Training set error measures:
+#                  ME     RMSE      MAE     MPE     MAPE    
+#Training set -0.9843467 9.566099 7.020541 -5.7236 17.64913 
+
+summary(model_2_SARIMA)#Summary of 2 week training hist
+#AIC=2361.97   AICc=2362.34   BIC=2388.17
+#Training set error measures:
+#                  ME     RMSE      MAE       MPE     MAPE    
+#Training set 0.1169184 9.068309 6.762401 -2.957428 16.44834
+
+summary(model_3_SARIMA) #Summary of 4 week training hist***
+#AIC=4857.8   AICc=4857.97   BIC=4889.12
+#Training set error measures:
+#                  ME     RMSE      MAE       MPE    MAPE      MASE          ACF1
+#Training set 0.3478861 9.373981 7.026844 -4.751162 18.3443 0.1554888 -0.0004432175
+
+summary(model_4_SARIMA) #Summary of 8 week training hist
+#AIC=10015.96   AICc=10016.07   BIC=10057.44
+#Training set error measures:
+#                 ME     RMSE      MAE       MPE     MAPE      MASE         ACF1
+#Training set 0.596526 10.33187 7.817356 -6.384285 22.62406 0.1820857 -0.002646848
+
+summary(model_5_SARIMA) #Summary of 12 week training hist
+#AIC=10015.96   AICc=10016.07   BIC=10057.44
+#Training set error measures:
+#                  ME     RMSE      MAE       MPE     MAPE      MASE         ACF1
+#Training set 0.596526 10.33187 7.817356 -6.384285 22.62406 0.1820857 -0.002646848
+
+
+## Summary of Model Performance in TEST (4 DAYS)
+fcp1_RMSE; fcp1_MAPE
+fcp2_RMSE;fcp2_MAPE
+fcp4_RMSE;fcp4_MAPE
+fcp8_RMSE;fcp8_MAPE
+fcp12_RMSE; fcp12_MAPE
+
+
+#### STEP_11 - Back-testing & Benchmarking Performance with NAIVE model ####
 
 #Hist period --> first recorded 4 weeks --> ["2022-06-06/2022-07-03"]
 library(forecast)
