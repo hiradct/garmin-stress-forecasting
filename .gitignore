@@ -180,3 +180,6 @@ rsconnect/
 
 # Ignore local Excel files
 *.xlsx
+
+# OS generated files
+.DS_Store

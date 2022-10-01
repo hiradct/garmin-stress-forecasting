@@ -30,7 +30,7 @@ ui <- fluidPage(
           "Stress" = "stress level"
         )
       ),
-      numericInput("ahead", "Hours to forecast:", 48),
+      numericInput("ahead", "Hours to forecast:", 24),
       submitButton("Update view")
     ),
     mainPanel(
